@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Media Upload</title>
+</head>
+<body>
+
+<h2>Upload Audio or Video File</h2>
+
+<form id="audioForm" enctype="multipart/form-data">
+    <input type="file" name="media" id="mediaFile" accept="audio/*,video/*" required>
+    <br><br>
+    <button type="submit">Upload</button>
+</form>
+
+<h3>Extracted Audio:</h3>
+<audio id="audioPlayer" controls style="display:none;"></audio>
+
+<h3>Converted Text:</h3>
+<textarea id="result" rows="10" cols="80" readonly></textarea>
+<!-- <h3>Summary (Bullet Points):</h3>
+<textarea id="summaryBox" rows="7" cols="80" readonly style="background:#f1f1f1;"></textarea> -->
+
+<script>
+document.getElementById("audioForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById("mediaFile");
+    if (fileInput.files.length === 0) {
+        alert("Please select a file");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("media", fileInput.files[0]); // 🔴 NEW KEY
+
+    fetch("/transcribe/", {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.audio_url) {
+            const player = document.getElementById("audioPlayer");
+            player.src = data.audio_url;
+            player.style.display = "block";
+        }
+
+        document.getElementById("result").value =
+            data.text || data.error || "Processing failed";
+    })
+    .catch(() => {
+        document.getElementById("result").value = "Server error";
+    });
+});
+
+</script>
+
+</body>
+</html>
