@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Student Assistant – Prototype</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 900px;
+            margin: auto;
+        }
+
+        textarea {
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+
+        .section {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #ccc;
+        }
+
+        /* 🔹 CHAT UI */
+        #chatBox {
+            border: 1px solid #ccc;
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f9f9f9;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 8px 12px;
+            margin: 6px 0;
+            border-radius: 10px;
+            line-height: 1.4;
+            font-size: 14px;
+            clear: both;
+        }
+
+        .user {
+            background: #dcf8c6;
+            float: right;
+            text-align: right;
+        }
+
+        .bot {
+            background: #ffffff;
+            float: left;
+            text-align: left;
+        }
+
+        #chatControls {
+            display: flex;
+            gap: 10px;
+        }
+
+        #chatQuestion {
+            flex: 1;
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>🎧 Upload Audio / Video (Lecture)</h2>
+
+<form id="audioForm" enctype="multipart/form-data">
+    <input type="file" name="media" id="mediaFile" accept="audio/*,video/*" required>
+    <br><br>
+    <button type="submit">Convert to Text</button>
+</form>
+
+<div class="section">
+    <h3>📝 Converted Text</h3>
+    <textarea id="result" rows="10" readonly></textarea>
+</div>
+
+<div class="section">
+    <h3>📌 Key Bullet Notes</h3>
+    <button id="summaryBtn">Generate Summary</button>
+    <textarea id="summaryBox" rows="8" readonly style="background:#f1f1f1;"></textarea>
+</div>
+
+<div class="section">
+    <h3>🤖 Ask from the Lecture</h3>
+
+    <!-- CHAT BOX -->
+    <div id="chatBox"></div>
+
+    <!-- INPUT -->
+    <div id="chatControls">
+        <input type="text" id="chatQuestion" placeholder="Ask a question..." />
+        <button id="askBtn">Send</button>
+    </div>
+</div>
+
+<script>
+let transcriptText = "";
+let chatHistory = [];
+
+const chatBox = document.getElementById("chatBox");
+
+function addMessage(text, sender) {
+    chatHistory.push({ role: sender, text: text });
+
+    const msg = document.createElement("div");
+    msg.classList.add("message", sender);
+    msg.innerText = text;
+
+    chatBox.appendChild(msg);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+/* 🔹 AUDIO → TEXT */
+document.getElementById("audioForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById("mediaFile");
+    if (fileInput.files.length === 0) {
+        alert("Please select a file");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("media", fileInput.files[0]);
+
+    document.getElementById("result").value =
+        "Processing... this may take a few minutes.";
+
+    fetch("/transcribe/", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.text) {
+            transcriptText = data.text;
+            document.getElementById("result").value = data.text;
+        } else {
+            document.getElementById("result").value = data.error || "Failed";
+        }
+    })
+    .catch(() => {
+        document.getElementById("result").value = "Server error";
+    });
+});
+
+/* 🔹 SUMMARY */
+document.getElementById("summaryBtn").addEventListener("click", function () {
+    if (!transcriptText) {
+        alert("Please generate text first");
+        return;
+    }
+
+    document.getElementById("summaryBox").value = "Generating summary...";
+
+    fetch("/summarize/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: transcriptText })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("summaryBox").value =
+            data.summary_points ? data.summary_points.join("\n") : "No summary";
+    });
+});
+
+/* 🔹 CHATBOT */
+document.getElementById("askBtn").addEventListener("click", function () {
+    const question = document.getElementById("chatQuestion").value.trim();
+
+    if (!question || !transcriptText) {
+        alert("Enter question and generate text first");
+        return;
+    }
+
+    addMessage(question, "user");
+    document.getElementById("chatQuestion").value = "";
+
+    addMessage("Thinking...", "bot");
+
+    fetch("/chat/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        context: transcriptText,
+        question: question,
+    })
+})
+
+    .then(res => res.json())
+    .then(data => {
+        chatBox.lastChild.remove(); // remove "Thinking..."
+        addMessage(data.answer || "No answer", "bot");
+    });
+});
+</script>
+
+</body>
+</html>
